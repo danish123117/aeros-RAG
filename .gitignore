@@ -4,6 +4,5 @@ __pycache__
 .venv
 .env
 orders.log
-Datamodels/
 .vscode/
 

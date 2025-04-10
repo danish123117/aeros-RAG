@@ -1,0 +1,64 @@
+{
+    "id": "urn:ngsi-ld:Order:Order-UUID",
+    "type": "Order",
+    "creationTime": {
+        "type": "Property",
+        "value": "2024-01-16T17:50:07.5870Z"
+    },
+    "orderQuantity": {
+        "type": "Property",
+        "value": 5
+    },
+    "orderStatus": {
+        "type": "Property",
+        "value": "NOTSTARTED"
+    },
+    "productionLocation": {
+        "type": "Property",
+        "value": "INHOUSE"
+    },
+    "productionStartTime": {
+        "type": "Property",
+        "value": "2024-01-16T17:50:07.5870Z"
+    },
+    "productionEndTime": {
+        "type": "Property",
+        "value": "2024-01-16T17:50:07.5870Z"
+    }
+}
+
+{
+    "id": "urn:ngsi-ld:Order:Order-UUID",
+    "type": "Order",
+    "creationTime": {
+        "type": "Property",
+        "value": "2024-01-16T17:50:07.5870Z"
+    },
+    "orderQuantity": {
+        "type": "Property",
+        "value": 5
+    },
+    "orderStatus": {
+        "type": "Property",
+        "value": "NOTSTARTED"
+    },
+    "productionLocation": {
+        "type": "Property",
+        "value": "OUTSOURCE"
+    },
+    "orderOutsourceTime": {
+        "type": "Property",
+        "value": "2024-01-16T17:50:07.5870Z"
+    },
+    "productReceiveTime": {
+        "type": "Property",
+        "value": "2024-01-16T17:50:07.5870Z"
+    },
+    "totalProductionTime": {
+        "type": "Property",
+        "value": 5
+    }
+}
+
+##"orderStatus" : "NOTSTARTED" -> "INPROGRESS" -> "COMPLETED"
+##"productionLocation" : "INHOUSE" -> "OUTSOURCE"
