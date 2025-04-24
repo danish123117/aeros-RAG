@@ -103,6 +103,51 @@ def update_processing_order_list(updated_list, ORION_HOST, ORION_PORT, context, 
 
 
 
+
+def _patch_entity_id_inprocess_outsource(entityid, ORION_HOST, ORION_PORT,  context, context_port,timestamp):
+    """Extract the entity ID from the entity list."""
+    url = f"http://{ORION_HOST}:{ORION_PORT}/ngsi-ld/v1/entities/{entityid}/attrs"
+    headers = {
+        'Content-Type': "application/json",
+        "Link": f'<http://{context}:{context_port}/ngsi-context.jsonld>; rel="http://www.w3.org/ns/json-ld#context"; type="application/ld+json"'
+    }
+
+    update_payload = {
+        "orderStatus": {
+            "type": "Property",
+            "value": "INPROGRESS"
+        },  
+         "productionLocation": {
+              "type": "Property",
+              "value": "OUTSOURCE"
+         },
+          "orderOutsourceTime": {
+              "type": "Property",
+              "value": timestamp
+        }
+    }
+
+    try:
+        response = requests.patch(url, json=update_payload, headers=headers)
+        response.raise_for_status()
+        logger.info("Successfully updated processingOrderList.")
+        return True
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to update entity: {e}")
+        return False
+
+
+    
+def update_outsource_processing_order_list(updated_list, ORION_HOST, ORION_PORT, context, context_port,timestamp):
+    """Update the processingOrderList attribute in Orion-LD."""
+    for order in updated_list:
+        if not _patch_entity_id_inprocess_outsource(order["id"], ORION_HOST, ORION_PORT, context, context_port,timestamp):
+            return False
+    return True
+
+
+
+
 def _patch_entity_id_complete(entityid, ORION_HOST, ORION_PORT,  context, context_port,timestamp):
     """Extract the entity ID from the entity list."""
     url = f"http://{ORION_HOST}:{ORION_PORT}/ngsi-ld/v1/entities/{entityid}/attrs"
