@@ -247,7 +247,8 @@ def ngsi_subscribe_status_update(orion, orion_port, context, context_port, notif
 
 
 
-
+def post_to_polimi_orion(entity_list):
+    
 
 
 
