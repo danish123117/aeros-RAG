@@ -8,7 +8,8 @@ import json
 from datetime import datetime, timezone
 import logging
 from orionClient.orion_client import *
-
+import joblib
+import numpy as np
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -19,7 +20,9 @@ global in_process_list
 in_process_list = []
 global lea_order
 lea_order = None
-
+# Load the scaler and model
+scaler = joblib.load('scaler.pkl')
+model = joblib.load('final_model.pkl')
 
 ORION_LD_URL = os.getenv("ORION_LD_URL", "localhost")
 ORION_LD_PORT = os.getenv("ORION_LD_PORT", 1026)
@@ -29,6 +32,12 @@ CONTEXT_PORT = os.getenv("CONTEXT_PORT", 5051)
 
 auth_token = None
 #################################################################################################
+# Function to parse productionStartTime
+def parse_time(item):
+    return datetime.strptime(item["productionStartTime"], "%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+
 def orderQuantity(order_list):
     order_qty = 0
     for order in order_list:
@@ -41,9 +50,13 @@ def orderQuantity(order_list):
     return order_qty
 
 def Mlprocessing(input_val):
-    Model = None
-    #TODO create the MLmodel
-    return Model(input_val)
+    # Scale the sample using the loaded scaler
+    sample_scaled = scaler.transform(input_val)
+
+    # Predict
+    prediction = model.predict(sample_scaled)
+
+    return True if prediction[0] == 1 else False
 
 def choose_top_n(incomplete_order_list, n):
     if len(incomplete_order_list) != 0:
@@ -71,12 +84,50 @@ def complete_production():
     if process_stat:
         start_time = in_process_list[0]["productionStartTime"]
         quantity = orderQuantity(in_process_list) 
-        time_to_finish = quantity*7.5 + 3 -(datetime.now() - start_time) # the time difference should be in minutes
-        #TODO complete the convertion of datetime.now() - start_time
-        #TODO average of creationTime in all three list for top n ex 10.
-        average_inter_arrival = None
+        # Get the current time in UTC
+        now = datetime.now(timezone.utc)
 
-        outsourcing_action = Mlprocessing(start_time, quantity, time_to_finish, average_inter_arrival)
+        # Compute the difference
+        time_diff = now - start_time
+
+        # Get the difference in minutes
+        minutes_diff = time_diff.total_seconds() / 60
+        
+        # time_to_finish = quantity*7.5 + 3 -(datetime.now() - start_time) # the time difference should be in minutes
+        time_to_finish = quantity*7.5 + 3 - (minutes_diff) # the time difference should be in minutes
+
+        all_list = incomplete_orders_list + in_process_list + complete_orders_list
+
+        # Sort the list (latest first)
+        all_sorted = sorted(all_list, key=parse_time, reverse=True)
+        # Take first N items
+        top_n = all_sorted[:n]
+
+        # Parse the times
+        top_n_times = [parse_time(item) for item in top_n]
+
+        # Calculate differences in minutes
+        differences_minutes = []
+        for i in range(len(top_n_times) - 1):
+            diff = (top_n_times[i] - top_n_times[i+1]).total_seconds() / 60
+            differences_minutes.append(diff)
+
+        # Calculate average difference
+        if differences_minutes:
+            average_inter_arrival = sum(differences_minutes) / len(differences_minutes)
+        else:
+            average_inter_arrival = 0
+        
+
+        #TODO complete the convertion of datetime.now() - start_time
+        # DONE
+
+        #TODO average of creationTime in all three list for top n ex 10. 
+        # DONE
+
+        # average_inter_arrival = None
+
+        outsourcing_action = Mlprocessing([queue_size, process_stat, time_to_finish, average_inter_arrival,  quantity])
 
         if outsourcing_action:
             choose_top_n(incomplete_orders_list, n)
