@@ -10,11 +10,13 @@ import logging
 from orionClient.orion_client import *
 import joblib
 import numpy as np
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime, timezone
+import time
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-app = Flask(__name__)
 
 global in_process_list
 in_process_list = []
@@ -29,7 +31,9 @@ ORION_LD_PORT = os.getenv("ORION_LD_PORT", 1026)
 CONTEXT_URL = os.getenv("CONTEXT_URL", "context")
 CONTEXT_PORT = os.getenv("CONTEXT_PORT", 5051)
 
-
+POLIMI_ORION_LD_URL = os.getenv("ORION_LD_URL", "localhost")
+POLIMI_CONTEXT_URL = os.getenv("POLIMI_CONTEXT_URL", "context")
+POLIMI_ORION_LD_PORT = os.getenv("POLIMI_ORION_LD_PORT", 1026)
 auth_token = None
 #################################################################################################
 # Function to parse productionStartTime
@@ -76,8 +80,8 @@ def choose_top_n(incomplete_order_list, n):
     else:
         return jsonify({"Status": "No orders to process"})
 
-@app.route("/complete_production", methods=["POST"])
-def complete_production():
+
+def ml_pipeline():
     n = 3
     incomplete_orders_list, in_process_list, complete_orders_list = extract_entity_data(ORION_LD_URL, ORION_LD_PORT, CONTEXT_URL, CONTEXT_PORT, ENTITY_TYPE="Order")
     queue_size, process_stat =  len(incomplete_orders_list), 1 if len(in_process_list) > 0 else 0 # first input, and thrid input 
@@ -132,8 +136,69 @@ def complete_production():
         if outsourcing_action:
             choose_top_n(incomplete_orders_list, n)
     
+def ml_pipeline2():
+    n = 3
+    incomplete_orders_list, in_process_list, complete_orders_list = extract_entity_data(ORION_LD_URL, ORION_LD_PORT, CONTEXT_URL, CONTEXT_PORT, ENTITY_TYPE="Order")
+    queue_size, process_stat =  len(incomplete_orders_list), 1 if len(in_process_list) > 0 else 0 # first input, and thrid input 
+    if process_stat:
+        start_time = in_process_list[0]["productionStartTime"]
+        quantity = orderQuantity(in_process_list) 
+        # Get the current time in UTC
+        now = datetime.now(timezone.utc)
 
+        # Compute the difference
+        time_diff = now - start_time
 
-if __name__ == "__main__":
-    # app.run(host="0.0.0.0", port=3040,debug=True) 
-    serve(app)
+        # Get the difference in minutes
+        minutes_diff = time_diff.total_seconds() / 60
+        
+        # time_to_finish = quantity*7.5 + 3 -(datetime.now() - start_time) # the time difference should be in minutes
+        time_to_finish = quantity*7.5 + 3 - (minutes_diff) # the time difference should be in minutes
+
+        all_list = incomplete_orders_list + in_process_list + complete_orders_list
+
+        # Sort the list (latest first)
+        all_sorted = sorted(all_list, key=parse_time, reverse=True)
+        # Take first N items
+        top_n = all_sorted[:n]
+
+        # Parse the times
+        top_n_times = [parse_time(item) for item in top_n]
+
+        # Calculate differences in minutes
+        differences_minutes = []
+        for i in range(len(top_n_times) - 1):
+            diff = (top_n_times[i] - top_n_times[i+1]).total_seconds() / 60
+            differences_minutes.append(diff)
+
+        # Calculate average difference
+        if differences_minutes:
+            average_inter_arrival = sum(differences_minutes) / len(differences_minutes)
+        else:
+            average_inter_arrival = 0
+        
+
+        #TODO complete the convertion of datetime.now() - start_time
+        # DONE
+
+        #TODO average of creationTime in all three list for top n ex 10. 
+        # DONE
+
+        # average_inter_arrival = None
+
+        outsourcing_action = Mlprocessing([queue_size, process_stat, time_to_finish, average_inter_arrival,  quantity])
+
+        if outsourcing_action:
+            choose_top_n(incomplete_orders_list, n)
+
+if __name__ == '__main__':
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(ml_pipeline2, 'interval', minutes=5)
+    scheduler.start()
+    print("Scheduler started. Running every 5 minutes.")
+    try:
+        while True:
+            time.sleep(1)
+    except (KeyboardInterrupt, SystemExit):
+        scheduler.shutdown()
+        print("Scheduler shut down.")
